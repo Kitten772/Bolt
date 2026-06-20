@@ -7,6 +7,9 @@ let EpoxyClient, EpoxyClientOptions, EpoxyHandlers;
 async function loadEpoxy() {
     if (EpoxyClient) return;
     const mod = await import('/epoxy/epoxy-bundled.js');
+    // Must call the default export (__wbg_init) to initialize the WASM binary
+    // before any class constructors (EpoxyClient, EpoxyClientOptions, etc.) work
+    await mod.default();
     EpoxyClient = mod.EpoxyClient;
     EpoxyClientOptions = mod.EpoxyClientOptions;
     EpoxyHandlers = mod.EpoxyHandlers;
