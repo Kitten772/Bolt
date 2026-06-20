@@ -5,7 +5,6 @@ if (navigator.userAgent.includes("Firefox")) {
     });
 }
 
-
 importScripts("/math/uv.bundle.js");
 importScripts("/math/uv.config.js");
 importScripts("/math/uv.sw.js");
@@ -15,31 +14,76 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uv = new UVServiceWorker(self.__uv$config);
 const scramjet = new ScramjetServiceWorker();
 
+const STATIC_CACHE = "bolt-static-v1";
+const STATIC_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
+                     ".woff", ".woff2", ".ttf", ".otf", ".eot",
+                     ".css", ".mp4", ".webm"];
+
+function isStaticAsset(url) {
+    try {
+        const u = new URL(url);
+        return STATIC_EXTS.some(ext => u.pathname.endsWith(ext));
+    } catch {
+        return false;
+    }
+}
 
 async function handleRequest(event) {
     try {
         await scramjet.loadConfig().catch(err => console.error("Scramjet Config Load Failed", err));
 
         if (uv.route(event)) {
-            return await uv.fetch(event);
+            const response = await uv.fetch(event);
+            return response;
         }
 
-
         if (scramjet.route(event)) {
-            return await scramjet.fetch(event);
+            const response = await scramjet.fetch(event);
+            return response;
         }
     } catch (error) {
         console.error("Proxy Error:", error);
-    }
 
+        try {
+            if (uv.route(event)) {
+                return await uv.fetch(event);
+            }
+            if (scramjet.route(event)) {
+                return await scramjet.fetch(event);
+            }
+        } catch (retryError) {
+            console.error("Proxy retry failed:", retryError);
+            return new Response(
+                `<html><body style="font-family:sans-serif;padding:2rem;background:#111;color:#eee">
+                    <h2>Proxy Error</h2>
+                    <p>${error.message || "Failed to load resource."}</p>
+                    <button onclick="history.back()" style="padding:.5rem 1rem;cursor:pointer">Go Back</button>
+                </body></html>`,
+                { status: 503, headers: { "Content-Type": "text/html" } }
+            );
+        }
+    }
 
     return fetch(event.request);
 }
 
-
-
 self.addEventListener("fetch", (event) => {
     event.respondWith(handleRequest(event));
+});
+
+self.addEventListener("activate", (event) => {
+    event.waitUntil(
+        caches.keys().then((keys) =>
+            Promise.all(
+                keys.filter(k => k !== STATIC_CACHE).map(k => caches.delete(k))
+            )
+        )
+    );
+    self.clients.claim();
+});
+
+self.addEventListener("install", () => {
+    self.skipWaiting();
 });
 
 let playgroundData;

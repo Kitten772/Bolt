@@ -1,22 +1,16 @@
 import { BareMuxConnection } from '@mercuryworkshop/bare-mux';
 
-// temp: change default to lib
 const wispUrl = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/wisp/";
 const bareUrl = (location.protocol === "https:" ? "https" : "http") + "://" + location.host + "/bare/";
 
+const transport = "/libcurl/index.mjs";
 
-
-var transport = "/libcurl/index.mjs";
 const { ScramjetController } = typeof $scramjetLoadController !== 'undefined' ? $scramjetLoadController() : {
     ScramjetController: class {
         init() { }
         encodeUrl(url: string) { return url; }
     } as any
 };
-
-if (localStorage.getItem('transport') === 'lib') {
-    transport = '/libcurl/index.mjs';
-}
 
 const scramjet = new ScramjetController({
     files: {
@@ -26,25 +20,41 @@ const scramjet = new ScramjetController({
     },
     flags: {
         rewriterLogs: false,
-        scramitize: false,
+        scramitize: true,
         cleanErrors: true,
-        sourcemaps: true,
+        sourcemaps: false,
     },
     siteFlags: {
-
+        "youtube.com": {
+            scramitize: true,
+        },
+        "youtu.be": {
+            scramitize: true,
+        },
+        "googlevideo.com": {
+            scramitize: true,
+        },
+        "googleapis.com": {
+            scramitize: true,
+        },
     },
     prefix: '/$/'
 });
 
 if (scramjet.init) scramjet.init();
+
 export const swReady = new Promise<void>((resolve) => {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').then(() => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((reg) => {
             if (navigator.serviceWorker.controller) {
                 resolve();
             } else {
                 navigator.serviceWorker.addEventListener('controllerchange', () => resolve());
             }
+            reg.update();
+        }).catch(err => {
+            console.error("Service worker registration failed:", err);
+            resolve();
         });
     } else {
         resolve();
@@ -53,9 +63,7 @@ export const swReady = new Promise<void>((resolve) => {
 
 const bmc = new BareMuxConnection("/baremux/worker.js");
 (async () => {
-    if (!await bmc.getTransport()) {
-        await bmc.setTransport(transport, [{ wisp: wispUrl }]);
-    }
+    await bmc.setTransport(transport, [{ wisp: wispUrl }]);
 })();
 
 function getProxyEngine(): string {
@@ -67,28 +75,37 @@ function getProxyEngine(): string {
     }
 }
 
+function uvBase64Encode(str: string): string {
+    if (!str) return str;
+    try {
+        return btoa(str);
+    } catch {
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+}
+
+function uvBase64Decode(str: string): string {
+    if (!str) return str;
+    try {
+        return atob(str);
+    } catch {
+        try {
+            return decodeURIComponent(escape(atob(str)));
+        } catch {
+            return str;
+        }
+    }
+}
+
 function encodeUrl(url: string): string {
     const engine = getProxyEngine();
 
     if (engine === 'ultraviolet') {
-        const encoded = uvXorEncode(url);
+        const encoded = uvBase64Encode(url);
         return '/maths/' + encoded;
     }
 
     return scramjet.encodeUrl(url);
-}
-
-function uvXorEncode(str: string): string {
-    if (!str) return str;
-    let result = '';
-    for (let i = 0; i < str.length; i++) {
-        if (i % 2) {
-            result += String.fromCharCode(str.charCodeAt(i) ^ 2);
-        } else {
-            result += str[i];
-        }
-    }
-    return encodeURIComponent(result);
 }
 
 function decodeProxiedUrl(proxiedUrl: string): string {
@@ -97,7 +114,7 @@ function decodeProxiedUrl(proxiedUrl: string): string {
     if (engine === 'ultraviolet' && proxiedUrl.includes('/maths/')) {
         const encoded = proxiedUrl.split('/maths/')[1];
         if (encoded) {
-            return uvXorDecode(encoded);
+            return uvBase64Decode(encoded);
         }
     }
 
@@ -106,22 +123,6 @@ function decodeProxiedUrl(proxiedUrl: string): string {
     }
 
     return proxiedUrl;
-}
-
-function uvXorDecode(str: string): string {
-    if (!str) return str;
-    let [input, ...search] = str.split('?');
-
-    let decodedInput = decodeURIComponent(input);
-    let result = '';
-    for (let i = 0; i < decodedInput.length; i++) {
-        if (i % 2) {
-            result += String.fromCharCode(decodedInput.charCodeAt(i) ^ 2);
-        } else {
-            result += decodedInput[i];
-        }
-    }
-    return result + (search.length ? '?' + search.join('?') : '');
 }
 
 function isProxiedUrl(url: string): boolean {

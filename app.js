@@ -19,7 +19,8 @@ const fastify = Fastify({
 
 fastify.addHook("onSend", async (request, reply, payload) => {
     reply.header("Cross-Origin-Opener-Policy", "same-origin");
-    reply.header("Cross-Origin-Embedder-Policy-Report-Only", "require-corp");
+    reply.header("Cross-Origin-Embedder-Policy", "credentialless");
+    reply.header("Cross-Origin-Resource-Policy", "cross-origin");
     return payload;
 });
 fastify.server.on("upgrade", (req, socket, head) => {
