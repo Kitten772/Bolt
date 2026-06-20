@@ -2,7 +2,18 @@ import { BareMuxConnection } from '@mercuryworkshop/bare-mux';
 
 const wispUrl = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/wisp/";
 
-const transport = "/libcurl/index.mjs";
+function getTransport(): string {
+    try {
+        const settings = JSON.parse(localStorage.getItem('bolt-settings') || '{}');
+        return settings.transport || 'libcurl';
+    } catch {
+        return 'libcurl';
+    }
+}
+
+const transportPath = getTransport() === 'epoxy'
+    ? '/epoxy-transport.mjs'
+    : '/libcurl/index.mjs';
 
 const { ScramjetController } = typeof $scramjetLoadController !== 'undefined' ? $scramjetLoadController() : {
     ScramjetController: class {
@@ -60,7 +71,7 @@ export const swReady = new Promise<void>((resolve) => {
 
 const bmc = new BareMuxConnection("/baremux/worker.js");
 (async () => {
-    await bmc.setTransport(transport, [{ wisp: wispUrl }]);
+    await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
 })();
 
 export function getProxyEngine(): string {

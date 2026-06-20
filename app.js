@@ -3,8 +3,11 @@ import fastifyStatic from "@fastify/static";
 import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { server as wisp } from "@mercuryworkshop/wisp-js/server";
+
+const epoxyPath = fileURLToPath(new URL("./node_modules/@mercuryworkshop/epoxy-tls/full", import.meta.url));
 
 
 
@@ -53,6 +56,17 @@ await fastify.register(fastifyStatic, {
     root: baremuxPath,
     prefix: "/baremux/",
     decorateReply: false
+});
+
+await fastify.register(fastifyStatic, {
+    root: epoxyPath,
+    prefix: "/epoxy/",
+    decorateReply: false,
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js') || path.endsWith('.mjs')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+    }
 });
 
 

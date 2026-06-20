@@ -5,6 +5,9 @@ import { server as wisp } from "@mercuryworkshop/wisp-js/server";
 import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 import sirv from "sirv";
+import { fileURLToPath } from "node:url";
+
+const epoxyPath = fileURLToPath(new URL("./node_modules/@mercuryworkshop/epoxy-tls/full", import.meta.url));
 
 function customDevServer() {
     return {
@@ -41,6 +44,7 @@ function customDevServer() {
                 });
 
                 server.middlewares.use('/baremux/', sirv(baremuxPath, { dev: true, etag: true }));
+                server.middlewares.use('/epoxy/', sirv(epoxyPath, { dev: true, etag: true }));
 
                 const serveLibcurl = sirv(libcurlPath, { dev: true, etag: true });
                 server.middlewares.use('/libcurl/', (req, res, next) => {

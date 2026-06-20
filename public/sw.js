@@ -14,7 +14,12 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uv = new UVServiceWorker(self.__uv$config);
 const scramjet = new ScramjetServiceWorker();
 
-// Headers that block proxied sites from loading in iframes or cause breakage
+// Load scramjet config ONCE at startup, not on every request
+let scramjetReady = scramjet.loadConfig().catch(err =>
+    console.error("Scramjet initial config load failed:", err)
+);
+
+// Headers that block proxied sites from loading in iframes
 const STRIP_RESPONSE_HEADERS = [
     "x-frame-options",
     "content-security-policy",
@@ -44,9 +49,10 @@ function stripBlockingHeaders(response) {
 }
 
 async function handleRequest(event) {
-    try {
-        await scramjet.loadConfig().catch(err => console.error("Scramjet Config Load Failed", err));
+    // Ensure scramjet config is loaded before routing (resolves instantly after first load)
+    await scramjetReady;
 
+    try {
         if (uv.route(event)) {
             const response = await uv.fetch(event);
             return stripBlockingHeaders(response);
@@ -59,15 +65,13 @@ async function handleRequest(event) {
     } catch (error) {
         console.error("Proxy Error:", error);
 
-        // Retry once
+        // Retry once on failure
         try {
             if (uv.route(event)) {
-                const response = await uv.fetch(event);
-                return stripBlockingHeaders(response);
+                return stripBlockingHeaders(await uv.fetch(event));
             }
             if (scramjet.route(event)) {
-                const response = await scramjet.fetch(event);
-                return stripBlockingHeaders(response);
+                return stripBlockingHeaders(await scramjet.fetch(event));
             }
         } catch (retryError) {
             console.error("Proxy retry failed:", retryError);

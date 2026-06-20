@@ -90,6 +90,18 @@ import Layout from "../Layouts/Layout.astro";
                     </div>
                     <div class="setting-item">
                         <div class="setting-info">
+                            <span class="setting-label">Connection Backend</span>
+                            <span class="setting-hint"
+                                >Epoxy uses WASM TCP — better bypass for YouTube, TikTok &amp; heavy sites</span
+                            >
+                        </div>
+                        <select id="transport-select" class="setting-select">
+                            <option value="libcurl" selected>LibCurl — Default</option>
+                            <option value="epoxy">⚡ Epoxy TLS — WASM TCP (Heavy Sites)</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
                             <span class="setting-label"
                                 >Update & Deep Clean</span
                             >
