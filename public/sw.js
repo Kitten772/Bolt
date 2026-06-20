@@ -14,18 +14,33 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uv = new UVServiceWorker(self.__uv$config);
 const scramjet = new ScramjetServiceWorker();
 
-const STATIC_CACHE = "bolt-static-v1";
-const STATIC_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
-                     ".woff", ".woff2", ".ttf", ".otf", ".eot",
-                     ".css", ".mp4", ".webm"];
+// Headers that block proxied sites from loading in iframes or cause breakage
+const STRIP_RESPONSE_HEADERS = [
+    "x-frame-options",
+    "content-security-policy",
+    "content-security-policy-report-only",
+    "cross-origin-opener-policy",
+    "cross-origin-embedder-policy",
+    "cross-origin-resource-policy",
+    "permissions-policy",
+    "x-content-type-options",
+];
 
-function isStaticAsset(url) {
-    try {
-        const u = new URL(url);
-        return STATIC_EXTS.some(ext => u.pathname.endsWith(ext));
-    } catch {
-        return false;
+function stripBlockingHeaders(response) {
+    const headers = new Headers(response.headers);
+    let stripped = false;
+    for (const h of STRIP_RESPONSE_HEADERS) {
+        if (headers.has(h)) {
+            headers.delete(h);
+            stripped = true;
+        }
     }
+    if (!stripped) return response;
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+    });
 }
 
 async function handleRequest(event) {
@@ -34,22 +49,25 @@ async function handleRequest(event) {
 
         if (uv.route(event)) {
             const response = await uv.fetch(event);
-            return response;
+            return stripBlockingHeaders(response);
         }
 
         if (scramjet.route(event)) {
             const response = await scramjet.fetch(event);
-            return response;
+            return stripBlockingHeaders(response);
         }
     } catch (error) {
         console.error("Proxy Error:", error);
 
+        // Retry once
         try {
             if (uv.route(event)) {
-                return await uv.fetch(event);
+                const response = await uv.fetch(event);
+                return stripBlockingHeaders(response);
             }
             if (scramjet.route(event)) {
-                return await scramjet.fetch(event);
+                const response = await scramjet.fetch(event);
+                return stripBlockingHeaders(response);
             }
         } catch (retryError) {
             console.error("Proxy retry failed:", retryError);
@@ -57,7 +75,7 @@ async function handleRequest(event) {
                 `<html><body style="font-family:sans-serif;padding:2rem;background:#111;color:#eee">
                     <h2>Proxy Error</h2>
                     <p>${error.message || "Failed to load resource."}</p>
-                    <button onclick="history.back()" style="padding:.5rem 1rem;cursor:pointer">Go Back</button>
+                    <button onclick="history.back()" style="padding:.5rem 1rem;cursor:pointer;background:#333;color:#eee;border:none;border-radius:6px">Go Back</button>
                 </body></html>`,
                 { status: 503, headers: { "Content-Type": "text/html" } }
             );
@@ -74,9 +92,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("activate", (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
-            Promise.all(
-                keys.filter(k => k !== STATIC_CACHE).map(k => caches.delete(k))
-            )
+            Promise.all(keys.map((k) => caches.delete(k)))
         )
     );
     self.clients.claim();

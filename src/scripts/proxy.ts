@@ -1,7 +1,6 @@
 import { BareMuxConnection } from '@mercuryworkshop/bare-mux';
 
 const wispUrl = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/wisp/";
-const bareUrl = (location.protocol === "https:" ? "https" : "http") + "://" + location.host + "/bare/";
 
 const transport = "/libcurl/index.mjs";
 
@@ -12,6 +11,7 @@ const { ScramjetController } = typeof $scramjetLoadController !== 'undefined' ? 
     } as any
 };
 
+// Standard Scramjet — fast, good general compatibility
 const scramjet = new ScramjetController({
     files: {
         wasm: "/learn/scramjet.wasm.wasm",
@@ -25,18 +25,15 @@ const scramjet = new ScramjetController({
         sourcemaps: false,
     },
     siteFlags: {
-        "youtube.com": {
-            scramitize: true,
-        },
-        "youtu.be": {
-            scramitize: true,
-        },
-        "googlevideo.com": {
-            scramitize: true,
-        },
-        "googleapis.com": {
-            scramitize: true,
-        },
+        "youtube.com": { scramitize: true },
+        "youtu.be": { scramitize: true },
+        "googlevideo.com": { scramitize: true },
+        "googleapis.com": { scramitize: true },
+        "google.com": { scramitize: true },
+        "reddit.com": { scramitize: true },
+        "twitch.tv": { scramitize: true },
+        "instagram.com": { scramitize: true },
+        "tiktok.com": { scramitize: true },
     },
     prefix: '/$/'
 });
@@ -66,7 +63,7 @@ const bmc = new BareMuxConnection("/baremux/worker.js");
     await bmc.setTransport(transport, [{ wisp: wispUrl }]);
 })();
 
-function getProxyEngine(): string {
+export function getProxyEngine(): string {
     try {
         const settings = JSON.parse(localStorage.getItem('bolt-settings') || '{}');
         return settings.proxyEngine || 'scramjet';
@@ -75,6 +72,7 @@ function getProxyEngine(): string {
     }
 }
 
+// Base64 — handles YouTube's complex URLs correctly (special chars, long query strings)
 function uvBase64Encode(str: string): string {
     if (!str) return str;
     try {
@@ -100,22 +98,18 @@ function uvBase64Decode(str: string): string {
 function encodeUrl(url: string): string {
     const engine = getProxyEngine();
 
-    if (engine === 'ultraviolet') {
-        const encoded = uvBase64Encode(url);
-        return '/maths/' + encoded;
+    if (engine === 'ultraviolet' || engine === 'ultraviolet-max') {
+        return '/maths/' + uvBase64Encode(url);
     }
 
+    // scramjet and scramjet-max both use Scramjet
     return scramjet.encodeUrl(url);
 }
 
 function decodeProxiedUrl(proxiedUrl: string): string {
-    const engine = getProxyEngine();
-
-    if (engine === 'ultraviolet' && proxiedUrl.includes('/maths/')) {
+    if (proxiedUrl.includes('/maths/')) {
         const encoded = proxiedUrl.split('/maths/')[1];
-        if (encoded) {
-            return uvBase64Decode(encoded);
-        }
+        if (encoded) return uvBase64Decode(encoded.split('?')[0]);
     }
 
     if (proxiedUrl.includes('/$/')) {
@@ -130,7 +124,8 @@ function isProxiedUrl(url: string): boolean {
 }
 
 function getProxyPrefix(): string {
-    return getProxyEngine() === 'ultraviolet' ? '/maths/' : '/$/';
+    const engine = getProxyEngine();
+    return (engine === 'ultraviolet' || engine === 'ultraviolet-max') ? '/maths/' : '/$/';
 }
 
 const proxy = {
