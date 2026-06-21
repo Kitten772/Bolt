@@ -70,7 +70,7 @@ export const swReady = new Promise<void>((resolve) => {
 });
 
 const bmc = new BareMuxConnection("/baremux/worker.js");
-(async () => {
+export const transportReady: Promise<void> = (async () => {
     await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
 })();
 
