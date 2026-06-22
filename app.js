@@ -27,7 +27,19 @@ fastify.addHook("onSend", async (request, reply, payload) => {
     return payload;
 });
 fastify.server.on("upgrade", (req, socket, head) => {
-    wisp.routeRequest(req, socket, head);
+    console.log(`[WISP] Upgrade request: ${req.url}`);
+    try {
+        wisp.routeRequest(req, socket, head);
+    } catch (err) {
+        console.error(`[WISP] Error routing request:`, err);
+        socket.destroy();
+    }
+});
+
+// Explicit WISP endpoint for debugging
+fastify.get("/wisp/", (request, reply) => {
+    console.log("[WISP] GET request to /wisp/ (should be WebSocket)");
+    return reply.send({ error: "Use WebSocket, not HTTP" });
 });
 
 
@@ -69,6 +81,10 @@ await fastify.register(fastifyStatic, {
     }
 });
 
+
+fastify.get("/wisp-health", (request, reply) => {
+    return reply.send({ status: "ok", wisp: "reachable" });
+});
 
 fastify.get("/", (request, reply) => {
     return reply.sendFile("index.html");

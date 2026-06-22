@@ -71,7 +71,13 @@ export const swReady = new Promise<void>((resolve) => {
 
 const bmc = new BareMuxConnection("/baremux/worker.js");
 export const transportReady: Promise<void> = (async () => {
-    await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
+    try {
+        console.log('[Transport] Setting up with WISP URL:', wispUrl);
+        await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
+        console.log('[Transport] Transport ready');
+    } catch (err) {
+        console.error('[Transport] Setup failed:', err);
+    }
 })();
 
 export function getProxyEngine(): string {
