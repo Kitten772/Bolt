@@ -1,5 +1,7 @@
 import { BareMuxConnection } from '@mercuryworkshop/bare-mux';
 
+console.log('[Proxy] Module loading...');
+
 const wispUrl = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/wisp/";
 
 function getTransport(): string {
@@ -14,42 +16,6 @@ function getTransport(): string {
 const transportPath = getTransport() === 'epoxy'
     ? '/epoxy-transport.mjs'
     : '/libcurl/index.mjs';
-
-const { ScramjetController } = typeof $scramjetLoadController !== 'undefined' ? $scramjetLoadController() : {
-    ScramjetController: class {
-        init() { }
-        encodeUrl(url: string) { return url; }
-    } as any
-};
-
-// Standard Scramjet — fast, good general compatibility
-const scramjet = new ScramjetController({
-    files: {
-        wasm: "/learn/scramjet.wasm.wasm",
-        all: "/learn/scramjet.all.js",
-        sync: "/learn/scramjet.sync.js",
-    },
-    flags: {
-        rewriterLogs: false,
-        scramitize: true,
-        cleanErrors: true,
-        sourcemaps: false,
-    },
-    siteFlags: {
-        "youtube.com": { scramitize: true },
-        "youtu.be": { scramitize: true },
-        "googlevideo.com": { scramitize: true },
-        "googleapis.com": { scramitize: true },
-        "google.com": { scramitize: true },
-        "reddit.com": { scramitize: true },
-        "twitch.tv": { scramitize: true },
-        "instagram.com": { scramitize: true },
-        "tiktok.com": { scramitize: true },
-    },
-    prefix: '/$/'
-});
-
-if (scramjet.init) scramjet.init();
 
 export const swReady = new Promise<void>((resolve) => {
     if ('serviceWorker' in navigator) {
@@ -69,14 +35,68 @@ export const swReady = new Promise<void>((resolve) => {
     }
 });
 
-const bmc = new BareMuxConnection("/baremux/worker.js");
+// Scramjet Controller - initialized after SW is ready
+const { ScramjetController } = typeof $scramjetLoadController !== 'undefined' ? $scramjetLoadController() : {
+    ScramjetController: class {
+        init() { }
+        encodeUrl(url: string) { return url; }
+    } as any
+};
+
+let scramjet: any = {
+    init() { },
+    encodeUrl(url: string) { return url; }
+};
+
+// Initialize Scramjet after service worker is ready
+swReady.then(() => {
+    try {
+        console.log('[Proxy] Initializing Scramjet...');
+        scramjet = new ScramjetController({
+            files: {
+                wasm: "/learn/scramjet.wasm.wasm",
+                all: "/learn/scramjet.all.js",
+                sync: "/learn/scramjet.sync.js",
+            },
+            flags: {
+                rewriterLogs: false,
+                scramitize: true,
+                cleanErrors: true,
+                sourcemaps: false,
+            },
+            siteFlags: {
+                "youtube.com": { scramitize: true },
+                "youtu.be": { scramitize: true },
+                "googlevideo.com": { scramitize: true },
+                "googleapis.com": { scramitize: true },
+                "google.com": { scramitize: true },
+                "reddit.com": { scramitize: true },
+                "twitch.tv": { scramitize: true },
+                "instagram.com": { scramitize: true },
+                "tiktok.com": { scramitize: true },
+            },
+            prefix: '/$/'
+        });
+        if (scramjet.init) scramjet.init();
+        console.log('[Proxy] Scramjet initialized');
+    } catch (err) {
+        console.error('[Proxy] Scramjet init failed:', err);
+    }
+});
+
+let bmc: any;
 export const transportReady: Promise<void> = (async () => {
     try {
+        // Wait for service worker to be ready first
+        await swReady;
+        console.log('[Transport] Service worker ready, creating BareMuxConnection...');
+        bmc = new BareMuxConnection("/baremux/worker.js");
         console.log('[Transport] Setting up with WISP URL:', wispUrl);
         await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
         console.log('[Transport] Transport ready');
     } catch (err) {
-        console.error('[Transport] Setup failed:', err);
+        console.error('[Transport] Setup failed:', err instanceof Error ? err.message : err);
+        throw err;
     }
 })();
 
@@ -89,7 +109,6 @@ export function getProxyEngine(): string {
     }
 }
 
-// Base64 — handles YouTube's complex URLs correctly (special chars, long query strings)
 function uvBase64Encode(str: string): string {
     if (!str) return str;
     try {
@@ -154,4 +173,5 @@ const proxy = {
     scramjet,
 };
 
+console.log('[Proxy] Module loaded. Export:', proxy);
 export default proxy;

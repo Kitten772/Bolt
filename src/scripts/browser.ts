@@ -1,4 +1,25 @@
-import dummyProxy, { swReady, transportReady } from "./proxy";
+import { BareMuxConnection } from '@mercuryworkshop/bare-mux';
+import dummyProxy, { swReady } from "./encoding";
+
+const wispUrl = (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/wisp/";
+
+function getTransport(): string {
+    try {
+        const settings = JSON.parse(localStorage.getItem('bolt-settings') || '{}');
+        return settings.transport || 'libcurl';
+    } catch {
+        return 'libcurl';
+    }
+}
+
+const transportPath = getTransport() === 'epoxy'
+    ? '/epoxy-transport.mjs'
+    : '/libcurl/index.mjs';
+
+const bmc = new BareMuxConnection("/baremux/worker.js");
+export const transportReady: Promise<void> = (async () => {
+    await bmc.setTransport(transportPath, [{ wisp: wispUrl }]);
+})();
 
 // --- Site Alert Logic ---
 let siteAlerts: any[] = [];

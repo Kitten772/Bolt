@@ -49,41 +49,22 @@ function stripBlockingHeaders(response) {
 }
 
 async function handleRequest(event) {
-    // Ensure scramjet config is loaded before routing (resolves instantly after first load)
-    await scramjetReady;
-
     try {
+        // Only use Ultraviolet - Scramjet config loading fails
         if (uv.route(event)) {
             const response = await uv.fetch(event);
             return stripBlockingHeaders(response);
         }
-
-        if (scramjet.route(event)) {
-            const response = await scramjet.fetch(event);
-            return stripBlockingHeaders(response);
-        }
     } catch (error) {
-        console.error("Proxy Error:", error);
-
-        // Retry once on failure
-        try {
-            if (uv.route(event)) {
-                return stripBlockingHeaders(await uv.fetch(event));
-            }
-            if (scramjet.route(event)) {
-                return stripBlockingHeaders(await scramjet.fetch(event));
-            }
-        } catch (retryError) {
-            console.error("Proxy retry failed:", retryError);
-            return new Response(
-                `<html><body style="font-family:sans-serif;padding:2rem;background:#111;color:#eee">
-                    <h2>Proxy Error</h2>
-                    <p>${error.message || "Failed to load resource."}</p>
-                    <button onclick="history.back()" style="padding:.5rem 1rem;cursor:pointer;background:#333;color:#eee;border:none;border-radius:6px">Go Back</button>
-                </body></html>`,
-                { status: 503, headers: { "Content-Type": "text/html" } }
-            );
-        }
+        console.error("UV Proxy Error:", error);
+        return new Response(
+            `<html><body style="font-family:sans-serif;padding:2rem;background:#111;color:#eee">
+                <h2>Proxy Error</h2>
+                <p>${error.message || "Failed to load resource."}</p>
+                <button onclick="history.back()" style="padding:.5rem 1rem;cursor:pointer;background:#333;color:#eee;border:none;border-radius:6px">Go Back</button>
+            </body></html>`,
+            { status: 503, headers: { "Content-Type": "text/html" } }
+        );
     }
 
     return fetch(event.request);
