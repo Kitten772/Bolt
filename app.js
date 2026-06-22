@@ -23,7 +23,7 @@ const fastify = Fastify({
 fastify.addHook("onSend", async (request, reply, payload) => {
     // Always set these headers - they're needed for BroadcastChannel in iframes
     reply.header("Cross-Origin-Opener-Policy", "same-origin");
-    reply.header("Cross-Origin-Embedder-Policy", "credentialless");
+    reply.header("Cross-Origin-Embedder-Policy", "require-corp");
     reply.header("Cross-Origin-Resource-Policy", "cross-origin");
     return payload;
 });
